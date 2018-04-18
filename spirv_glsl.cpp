@@ -1193,7 +1193,11 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 		uint32_t minimum_desktop_version = block ? 440 : 410;
 		// ARB_enhanced_layouts vs ARB_separate_shader_objects ...
 
-		if (!options.es && options.version < minimum_desktop_version && !options.separate_shader_objects)
+		// SSO drops the version requirement if present
+		if (!block && !options.separate_shader_objects)
+			minimum_desktop_version = 0;
+
+		if (!options.es && options.version < minimum_desktop_version)
 			return false;
 		else if (options.es && options.version < 310)
 			return false;
