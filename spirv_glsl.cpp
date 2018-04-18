@@ -1194,7 +1194,7 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 		// ARB_enhanced_layouts vs ARB_separate_shader_objects ...
 
 		// SSO drops the version requirement if present
-		if (!block && !options.separate_shader_objects)
+		if (!block && options.separate_shader_objects)
 			minimum_desktop_version = 0;
 
 		if (!options.es && options.version < minimum_desktop_version)
@@ -2233,16 +2233,19 @@ void CompilerGLSL::emit_resources()
 			{
 				// For gl_InstanceIndex emulation on GLES, the API user needs to
 				// supply this uniform.
-                if ((meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics) ||
-                        (meta[var.self].decoration.builtin_type == BuiltInBaseInstance && (options.es || options.version < 460)))
-                {
-                    statement("uniform int SPIRV_Cross_BaseInstance;");
+				if ((meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics) ||
+				    (meta[var.self].decoration.builtin_type == BuiltInBaseInstance &&
+				     (options.es || options.version < 460)))
+				{
+					statement("uniform int SPIRV_Cross_BaseInstance;");
 					emitted = true;
-                }else if(meta[var.self].decoration.builtin_type == BuiltInInstanceId && !options.vulkan_semantics && is_legacy_es())
-                {
-                    statement("uniform int SPIRV_Cross_InstanceID;");
-                    emitted = true;
-                }
+				}
+				else if (meta[var.self].decoration.builtin_type == BuiltInInstanceId && !options.vulkan_semantics &&
+				         is_legacy_es())
+				{
+					statement("uniform int SPIRV_Cross_InstanceID;");
+					emitted = true;
+				}
 			}
 		}
 	}
@@ -4852,10 +4855,10 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW(
 			    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
-        if(options.es && options.version < 300)
-            return "SPIRV_Cross_InstanceID";
-        else
-            return "gl_InstanceID";
+		if (options.es && options.version < 300)
+			return "SPIRV_Cross_InstanceID";
+		else
+			return "gl_InstanceID";
 	case BuiltInVertexIndex:
 		if (options.vulkan_semantics)
 			return "gl_VertexIndex";
@@ -4864,11 +4867,10 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInstanceIndex:
 		if (options.vulkan_semantics)
 			return "gl_InstanceIndex";
+		else if (options.es && options.version < 300)
+			return "(SPIRV_Cross_InstanceID + SPIRV_Cross_BaseInstance)";
 		else
-            if(options.es && options.version < 300)
-                return "(SPIRV_Cross_InstanceID + SPIRV_Cross_BaseInstance)";
-            else
-                return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
+			return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
 	case BuiltInPrimitiveId:
 		return "gl_PrimitiveID";
 	case BuiltInInvocationId:
@@ -4941,11 +4943,11 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return "gl_ViewID_OVR";
 		}
 
-    case BuiltInBaseInstance:
-        if(!options.vulkan_semantics && !options.es && options.version >= 460)
-            return "gl_BaseInstance";
-        else
-            return "SPIRV_Cross_BaseInstance";
+	case BuiltInBaseInstance:
+		if (!options.vulkan_semantics && !options.es && options.version >= 460)
+			return "gl_BaseInstance";
+		else
+			return "SPIRV_Cross_BaseInstance";
 
 	case BuiltInNumSubgroups:
 		if (!options.vulkan_semantics)
@@ -8313,6 +8315,8 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 		res += "2D";
 		break;
 	case Dim3D:
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW("3D textures not supported before ESSL version 300");
 		res += "3D";
 		break;
 	case DimCube:
@@ -8335,19 +8339,27 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 	}
 
 	if (type.image.ms)
+	{
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("MS samplers not supported before ESSL version 310");
 		res += "MS";
+	}
 	if (type.image.arrayed)
 	{
 		if (is_legacy_desktop())
 			require_extension_internal("GL_EXT_texture_array");
-        if(is_legacy_es())
-            SPIRV_CROSS_THROW("Texture arrays not supported before ESSL version 300");
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW("Texture arrays not supported before ESSL version 300");
 		res += "Array";
 	}
 
 	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
 	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
+	{
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW("Shadow samplers not supported before ESSL version 300");
 		res += "Shadow";
+	}
 
 	return res;
 }
