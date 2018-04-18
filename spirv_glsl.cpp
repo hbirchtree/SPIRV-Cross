@@ -2238,7 +2238,7 @@ void CompilerGLSL::emit_resources()
                 {
                     statement("uniform int SPIRV_Cross_BaseInstance;");
 					emitted = true;
-                }else if(meta[var.self].decoration.builtin_type == BuiltInInstanceId && !options.vulkan_semantics)
+                }else if(meta[var.self].decoration.builtin_type == BuiltInInstanceId && !options.vulkan_semantics && is_legacy_es())
                 {
                     statement("uniform int SPIRV_Cross_InstanceID;");
                     emitted = true;
